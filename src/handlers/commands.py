@@ -53,8 +53,8 @@ async def help(update: Update, context: ContextTypes.DEFAULT_TYPE, command_name:
             break
 
     if len(instruction) == 0:
-        await update.effective_chat.send_message("Проверьте, правильно ли указано имя команды")
-        LOGGER.info(f"HELP : could not find the command \"{command_name}\"")
+        await update.effective_chat.send_message("Имя команды указано непрвильно")
+        LOGGER.info(f"Could not find the command '{command_name}'")
         return
     
     await update.effective_chat.send_message(msg + instruction)
@@ -70,21 +70,32 @@ async def vote(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
     
     msg_id = (await update.effective_chat.send_message("Голосование началось!")).id
-    
-    if mgmt.change_vote_state(chat_id, msg_id, args) == False:
-        await context.bot.editMessageText("Не удалось начать голосование", update.effective_chat.id, msg_id)
-        LOGGER.critical(f"Cant find chat for changing vote state, chat_id='{chat_id}'")
-        return
+    state, chat = data.get_vote_state(chat_id)
 
-    await shared.send_vote_result(update, context)
+    if len(chat) == 0:
+        LOGGER.info(f"Cant find chat for changing vote state, chat_id='{chat_id}'")
+    elif state == True:
+        await context.bot.editMessageText(
+            "Предыдущее голосование остановлено.\nВведите команду еще раз, чтобы запустить новое", 
+            update.effective_chat.id, 
+            msg_id
+        )
+        mgmt.disable_voting(chat)
+    else:
+        mgmt.enable_voting(chat, msg_id, args)
+        await shared.send_vote_result(update, context)    
 
 
 
 
 async def stop_vote(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    if mgmt.change_vote_state(update.effective_chat.id) == False:
-        await update.effective_chat.send_message("Не удалось остановить голосование")    
-    await update.effective_chat.send_message("Голосование остановлено")
+    chat_id = update.effective_chat.id
+    state, chat = data.get_vote_state(chat_id)
+    if state == False:
+        await update.effective_chat.send_message("Нет запущенного голосования")
+    else:
+        mgmt.disable_voting(chat)
+        await update.effective_chat.send_message("Голосование остановлено")
 
 
 
@@ -131,3 +142,4 @@ async def get_logs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if update.effective_message.from_user.id == BOT_OWNER_ID:
         with open(LOGS_PATH, 'r') as file:
             await update.effective_chat.send_document(file)
+            LOGGER.info(f"Logs sent to chat_id='{update.effective_chat.id}'")

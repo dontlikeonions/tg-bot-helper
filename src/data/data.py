@@ -19,7 +19,7 @@ def serialize(path: str = DATA_PATH, encd: str = ENCODING) -> None:
         json.dump(DATA, file, indent=4, ensure_ascii=False)
         file.close()
     except:
-        LOGGER.exception("failsed to serialize data")
+        LOGGER.exception("Failed to serialize data")
 
 
 def deserialize(path: str = DATA_PATH, encd: str = ENCODING) -> None:
@@ -29,7 +29,7 @@ def deserialize(path: str = DATA_PATH, encd: str = ENCODING) -> None:
         DATA = json.load(file)
         file.close()
     except JSONDecodeError:
-        LOGGER.exception("unable to access the data")
+        LOGGER.critical("Data file is empty")
 
 
 
@@ -69,3 +69,13 @@ def get_user(chat_id: int, user_id: int) -> dict:
     LOGGER.critical(f"could not found the user in chat, chat_id='{chat_id}', user_id={user_id}")
     return {}
         
+
+
+
+
+def get_vote_state(chat_id: int) -> Tuple[bool, dict]:
+    chat = get_chat(chat_id)
+    if len(chat) == 0:
+        return False, chat
+
+    return chat.get('vote_state'), chat
