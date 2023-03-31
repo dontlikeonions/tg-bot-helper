@@ -23,8 +23,9 @@ def main():
         CommandHandler("help", commands.help),
         CommandHandler("vote", commands.vote),
         CommandHandler("stop_vote", commands.stop_vote),
-        
-        MessageHandler(filters.ALL, messages.main_msg_handler),
+
+        MessageHandler(filters.TEXT, messages.text_handler),
+        MessageHandler(filters.ATTACHMENT, messages.attachment_handler),
     ]
 
     app.add_handlers(handlers)

@@ -13,39 +13,64 @@ from responses import TRIGGER_WORDS, TRIGGER_REPLIES
 import handlers.shared as shared
 
 
-async def main_msg_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:   
+
+async def add_user_if_new(update: Update) -> bool:
     if mgmt.add_user(update.effective_chat.id, update.effective_message.from_user) == False:
-        await update.effective_chat.send_message("Пожалуйста, напишите команду /start, чтобы я мог нормально работать")
+        await update.effective_chat.send_message("Пожалуйста, напишите команду /start")
+        return False
     
-    if data.get_chat(update.effective_chat.id).get('vote_state') == True:
-        await vote_handling(update, context)
+    return True
+
+
+async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if await add_user_if_new(update) == False:
         return
-
-    await check_trigger(update, context)
-
-
-
-
-async def vote_handling(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    
     text = update.effective_message.text
-    if len(text) != 1:
+    vote_state, chat = data.get_vote_state(update.effective_chat.id)
+
+    if vote_state == True:
+        await vote_handling(update, context, text, chat)
+
+    await check_trigger(update, text)
+
+
+
+async def attachment_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if await add_user_if_new(update) == False:
         return
     
-    num = int(update.effective_message.text)
-    res = mgmt.set_vote(update.effective_chat.id, update.effective_message.from_user.id, num)
-    if res == True:
-        await shared.send_vote_result(update, context, )
+    await check_trigger(update, update.effective_message.caption)
+
+
+
+async def vote_handling(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str, chat: dict) -> None:
+    try:
+        num = int(text)
+    except ValueError:
+        return 
+    
+    if not 0 < num < len(chat.get('votes')):
+        await update._effective_message.reply_text("Такой позиции в голосовании нет")
+        return
+    
+    user_id = update.effective_user.id
+    if mgmt.set_vote(chat, user_id, num) == True:
+        await shared.send_vote_result(update, context)
     else:
-        await update.effective_chat.send_message("Вы уже проголосовали")
+        await update.effective_message.reply_text("Вы уже проголосовали")
+        return 
+        
 
 
 
 
-async def check_trigger(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    text = update.effective_message.text
-    text_length = len(text)
-
-    if text == None or text_length > 100 or text_length == 0:
+async def check_trigger(update: Update, text: str) -> None:
+    if text == None:
+        return
+    
+    txt_len = len(text)
+    if not 1 < txt_len < 100:
         return
 
     with open('words.txt', 'a', encoding='utf-8') as file:
@@ -91,9 +116,8 @@ async def reply_for_trigger(reply : str, update: Update) -> None:
 
 def get_reply_for_trigger(trigger_type : str) -> str:
     replies = TRIGGER_REPLIES.get(trigger_type)
-
     if not replies:
-        LOGGER.info(f"TRIGGER_REPLIES : could not find command of type \"{trigger_type}\"")
+        LOGGER.info(f"Сould not find a '{trigger_type}' type of trigger")
 
     msg = ""
     current_hour = datetime.now().hour
